@@ -4,6 +4,7 @@ package kafka
 import (
 	"context"
 	"sync"
+	"fmt"
 
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
@@ -202,7 +203,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 				if err := k.opts.Codec.Unmarshal(sm.Value, &m); err != nil {
 					continue
 				}
-				m.Header["key"] = fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
+				m.Header["key"] = fmt.Sprintf("%s/%d/%d", sm.Topic, sm.Partition, sm.Offset)
 				if err := handler(&publication{
 					m:  &m,
 					t:  sm.Topic,
