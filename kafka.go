@@ -7,7 +7,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
-	log "github.com/micro/go-log"
+	"github.com/micro/go-log"
 	"github.com/micro/go-micro/broker"
 	"github.com/micro/go-micro/cmd"
 	"github.com/micro/go-micro/codec/json"
@@ -192,7 +192,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 			case err := <-c.Errors():
 				log.Log("[kafka]Error: %+v", err)
 			case ntf := <-c.Notifications():
-				log.log("[kafka]%+v", ntf)
+				log.Log("[kafka]%+v", ntf)
 			case sm := <-c.Messages():
 				// ensure message is not nil
 				if sm == nil {
