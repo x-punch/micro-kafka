@@ -202,6 +202,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 				if err := k.opts.Codec.Unmarshal(sm.Value, &m); err != nil {
 					continue
 				}
+				m.Header["key"] = fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
 				if err := handler(&publication{
 					m:  &m,
 					t:  sm.Topic,
