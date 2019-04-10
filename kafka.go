@@ -191,9 +191,9 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		for {
 			select {
 			case err := <-c.Errors():
-				log.Log("[kafka]Error: %+v", err)
+				log.Logf("[kafka]Error: %+v", err)
 			case ntf := <-c.Notifications():
-				log.Log("[kafka]%+v", ntf)
+				log.Logf("[kafka]%+v", ntf)
 			case sm := <-c.Messages():
 				// ensure message is not nil
 				if sm == nil {
