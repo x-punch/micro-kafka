@@ -4,39 +4,39 @@ package kafka
 import (
 	"context"
 	"sync"
-	"fmt"
 
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
-	"github.com/micro/go-log"
 	"github.com/micro/go-micro/broker"
 	"github.com/micro/go-micro/cmd"
 	"github.com/micro/go-micro/codec/json"
-	sc "gopkg.in/bsm/sarama-cluster.v2"
+	"github.com/micro/go-micro/util/log"
 )
 
 type kBroker struct {
 	addrs []string
 
-	c  sarama.Client
-	p  sarama.SyncProducer
-	sc []*sc.Client
+	c sarama.Client
+	p sarama.SyncProducer
+
+	sc []sarama.Client
 
 	scMutex sync.Mutex
 	opts    broker.Options
 }
 
 type subscriber struct {
-	s    *sc.Consumer
+	cg   sarama.ConsumerGroup
 	t    string
 	opts broker.SubscribeOptions
 }
 
 type publication struct {
-	t  string
-	c  *sc.Consumer
-	km *sarama.ConsumerMessage
-	m  *broker.Message
+	t    string
+	cg   sarama.ConsumerGroup
+	km   *sarama.ConsumerMessage
+	m    *broker.Message
+	sess sarama.ConsumerGroupSession
 }
 
 func init() {
@@ -52,7 +52,7 @@ func (p *publication) Message() *broker.Message {
 }
 
 func (p *publication) Ack() error {
-	p.c.MarkOffset(p.km, "")
+	p.sess.MarkMessage(p.km, "")
 	return nil
 }
 
@@ -65,7 +65,7 @@ func (s *subscriber) Topic() string {
 }
 
 func (s *subscriber) Unsubscribe() error {
-	return s.s.Close()
+	return s.cg.Close()
 }
 
 func (k *kBroker) Address() string {
@@ -102,7 +102,7 @@ func (k *kBroker) Connect() error {
 	k.p = p
 	k.scMutex.Lock()
 	defer k.scMutex.Unlock()
-	k.sc = make([]*sc.Client, 0)
+	k.sc = make([]sarama.Client, 0)
 
 	return nil
 }
@@ -152,14 +152,12 @@ func (k *kBroker) Publish(topic string, msg *broker.Message, opts ...broker.Publ
 	return err
 }
 
-func (k *kBroker) getSaramaClusterClient(topic string) (*sc.Client, error) {
+func (k *kBroker) getSaramaClusterClient(topic string) (sarama.Client, error) {
 	config := k.getClusterConfig()
-
-	cs, err := sc.NewClient(k.addrs, config)
+	cs, err := sarama.NewClient(k.addrs, config)
 	if err != nil {
 		return nil, err
 	}
-
 	k.scMutex.Lock()
 	defer k.scMutex.Unlock()
 	k.sc = append(k.sc, cs)
@@ -171,55 +169,44 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		AutoAck: true,
 		Queue:   uuid.New().String(),
 	}
-
 	for _, o := range opts {
 		o(&opt)
 	}
-
 	// we need to create a new client per consumer
-	cs, err := k.getSaramaClusterClient(topic)
+	c, err := k.getSaramaClusterClient(topic)
 	if err != nil {
 		return nil, err
 	}
-
-	c, err := sc.NewConsumerFromClient(cs, opt.Queue, []string{topic})
+	cg, err := sarama.NewConsumerGroupFromClient(opt.Queue, c)
 	if err != nil {
 		return nil, err
 	}
-
+	h := &consumerGroupHandler{
+		handler: handler,
+		subopts: opt,
+		kopts:   k.opts,
+		cg:      cg,
+	}
+	ctx := context.Background()
+	topics := []string{topic}
 	go func() {
 		for {
 			select {
-			case err := <-c.Errors():
-				log.Logf("[kafka]Error: %+v", err)
-			case ntf := <-c.Notifications():
-				log.Logf("[kafka]%+v", ntf)
-			case sm := <-c.Messages():
-				// ensure message is not nil
-				if sm == nil {
-					continue
+			case err := <-cg.Errors():
+				log.Log("consumer error:", err)
+			default:
+				err := cg.Consume(ctx, topics, h)
+				if err != nil {
+					log.Log(err)
 				}
-				var m broker.Message
-				if err := k.opts.Codec.Unmarshal(sm.Value, &m); err != nil {
-					continue
+				if err == sarama.ErrClosedConsumerGroup {
+					return
 				}
-				if m.Header == nil{
-					m.Header = make(map[string]string)
-				}
-				m.Header["key"] = fmt.Sprintf("%s/%d/%d", sm.Topic, sm.Partition, sm.Offset)
-				if err := handler(&publication{
-					m:  &m,
-					t:  sm.Topic,
-					c:  c,
-					km: sm,
-				}); err == nil && opt.AutoAck {
-					c.MarkOffset(sm, "")
-				}
+
 			}
 		}
 	}()
-
-	return &subscriber{s: c, opts: opt}, nil
+	return &subscriber{cg: cg, opts: opt, t: topic}, nil
 }
 
 func (k *kBroker) String() string {
@@ -261,11 +248,16 @@ func (k *kBroker) getBrokerConfig() *sarama.Config {
 	return DefaultBrokerConfig
 }
 
-func (k *kBroker) getClusterConfig() *sc.Config {
-	if c, ok := k.opts.Context.Value(clusterConfigKey{}).(*sc.Config); ok {
+func (k *kBroker) getClusterConfig() *sarama.Config {
+	if c, ok := k.opts.Context.Value(clusterConfigKey{}).(*sarama.Config); ok {
 		return c
 	}
 	clusterConfig := DefaultClusterConfig
-	clusterConfig.Config.Consumer.Offsets.Initial = sarama.OffsetNewest
+	// the oldest supported version is V0_10_2_0
+	if !clusterConfig.Version.IsAtLeast(sarama.V0_10_2_0) {
+		clusterConfig.Version = sarama.V0_10_2_0
+	}
+	clusterConfig.Consumer.Return.Errors = true
+	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetNewest
 	return clusterConfig
 }
