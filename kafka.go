@@ -193,7 +193,9 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		for {
 			select {
 			case err := <-cg.Errors():
-				log.Log(err)
+				if err != nil {
+					log.Log(err)
+				}
 			default:
 				err := cg.Consume(ctx, topics, h)
 				if err != nil {
