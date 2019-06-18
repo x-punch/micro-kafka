@@ -193,7 +193,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		for {
 			select {
 			case err := <-cg.Errors():
-				log.Log("consumer error:", err)
+				log.Log(err)
 			default:
 				err := cg.Consume(ctx, topics, h)
 				if err != nil {
@@ -202,7 +202,6 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 				if err == sarama.ErrClosedConsumerGroup {
 					return
 				}
-
 			}
 		}
 	}()
