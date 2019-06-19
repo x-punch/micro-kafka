@@ -6,6 +6,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/micro/go-micro/broker"
+	"github.com/micro/go-micro/util/log"
 )
 
 var (
@@ -40,8 +41,16 @@ type consumerGroupHandler struct {
 	sess    sarama.ConsumerGroupSession
 }
 
-func (*consumerGroupHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
-func (*consumerGroupHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
+func (*consumerGroupHandler) Setup(sess sarama.ConsumerGroupSession) error {
+	log.Logf("[Setup] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	return nil
+}
+
+func (*consumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
+	log.Logf("[Clean] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	return nil
+}
+
 func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
 		var m broker.Message
