@@ -58,7 +58,8 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			log.Logf("[Consume]%s: %s", h.kopts.Codec.String(), err.Error())
 			continue
 		}
-		m.Header["key"] = fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
+		msgKey := fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
+		m.Header["key"] = msgKey
 		if err := h.handler(&publication{
 			m:    &m,
 			t:    msg.Topic,
@@ -66,7 +67,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			cg:   h.cg,
 			sess: sess,
 		}); err != nil {
-			return fmt.Errorf("%d: %s", msg.Offset, err.Error())
+			return fmt.Errorf("%s: %s", msgKey, err.Error())
 		} else if h.subopts.AutoAck {
 			sess.MarkMessage(msg, "")
 		}
