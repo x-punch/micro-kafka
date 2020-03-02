@@ -62,7 +62,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 	for msg := range claim.Messages() {
 		var m broker.Message
 		if err := h.kopts.Codec.Unmarshal(msg.Value, &m); err != nil {
-			log.Errorf("[kafka]: failed to unmarshal: %v\n", err)
+			log.Errorf("[Consume]%s: %v", h.kopts.Codec.String(), err)
 			continue
 		}
 		msgKey := fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)

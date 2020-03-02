@@ -194,7 +194,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 			select {
 			case err := <-cg.Errors():
 				if err != nil {
-					log.Errorf("[kafka]consumer error: %v\n", err)
+					log.Error(err)
 				}
 			default:
 				err := cg.Consume(ctx, topics, h)
