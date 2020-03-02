@@ -7,10 +7,10 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
-	"github.com/micro/go-micro/broker"
-	"github.com/micro/go-micro/codec/json"
-	"github.com/micro/go-micro/config/cmd"
-	"github.com/micro/go-micro/util/log"
+	"github.com/micro/go-micro/v2/broker"
+	"github.com/micro/go-micro/v2/codec/json"
+	"github.com/micro/go-micro/v2/config/cmd"
+	log "github.com/micro/go-micro/v2/logger"
 )
 
 type kBroker struct {
@@ -194,7 +194,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 			select {
 			case err := <-cg.Errors():
 				if err != nil {
-					log.Log(err)
+					log.Errorf("[kafka]consumer error: %v\n", err)
 				}
 			default:
 				err := cg.Consume(ctx, topics, h)
@@ -206,7 +206,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 					case sarama.ErrClosedConsumerGroup:
 						return
 					}
-					log.Log(err)
+					log.Error(err)
 				}
 			}
 		}

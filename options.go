@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/Shopify/sarama"
-	"github.com/micro/go-micro/broker"
-	"github.com/micro/go-micro/util/log"
+	"github.com/micro/go-micro/v2/broker"
+	log "github.com/micro/go-micro/v2/logger"
 	"github.com/pkg/errors"
 )
 
@@ -33,6 +33,12 @@ func SubscribeContext(ctx context.Context) broker.SubscribeOption {
 	return setSubscribeOption(subscribeContextKey{}, ctx)
 }
 
+type subscribeConfigKey struct{}
+
+func SubscribeConfig(c *sarama.Config) broker.SubscribeOption {
+	return setSubscribeOption(subscribeConfigKey{}, c)
+}
+
 // consumerGroupHandler is the implementation of sarama.ConsumerGroupHandler
 type consumerGroupHandler struct {
 	handler broker.Handler
@@ -43,12 +49,12 @@ type consumerGroupHandler struct {
 }
 
 func (*consumerGroupHandler) Setup(sess sarama.ConsumerGroupSession) error {
-	log.Logf("[Setup] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	log.Infof("[Setup] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
 	return nil
 }
 
 func (*consumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
-	log.Logf("[Clean] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	log.Infof("[Cleanup] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
 	return nil
 }
 
@@ -56,18 +62,13 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 	for msg := range claim.Messages() {
 		var m broker.Message
 		if err := h.kopts.Codec.Unmarshal(msg.Value, &m); err != nil {
-			log.Logf("[Consume]%s: %s", h.kopts.Codec.String(), err.Error())
+			log.Errorf("[kafka]: failed to unmarshal: %v\n", err)
 			continue
 		}
 		msgKey := fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
 		m.Header["key"] = msgKey
-		if err := h.handler(&publication{
-			m:    &m,
-			t:    msg.Topic,
-			km:   msg,
-			cg:   h.cg,
-			sess: sess,
-		}); err != nil {
+		err := h.handler(&publication{m: &m, t: msg.Topic, km: msg, cg: h.cg, sess: sess})
+		if err != nil {
 			return errors.Wrapf(err, "%d", msg.Offset)
 		} else if h.subopts.AutoAck {
 			sess.MarkMessage(msg, "")
