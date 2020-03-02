@@ -7,6 +7,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/micro/go-micro/broker"
 	"github.com/micro/go-micro/util/log"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -67,7 +68,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			cg:   h.cg,
 			sess: sess,
 		}); err != nil {
-			return fmt.Errorf("%s: %s", msgKey, err.Error())
+			return errors.Wrapf(err, "%d", msg.Offset)
 		} else if h.subopts.AutoAck {
 			sess.MarkMessage(msg, "")
 		}
