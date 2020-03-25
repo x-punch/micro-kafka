@@ -61,17 +61,31 @@ func (*consumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
 		var m broker.Message
+		p := &publication{m: &m, t: msg.Topic, km: msg, cg: h.cg, sess: sess}
+		eh := h.kopts.ErrorHandler
+
 		if err := h.kopts.Codec.Unmarshal(msg.Value, &m); err != nil {
-			log.Errorf("[Consume]%s: %v", h.kopts.Codec.String(), err)
+			p.err = err
+			p.m.Body = msg.Value
+			if eh != nil {
+				eh(p)
+			} else {
+				log.Errorf("[Consume]%s: %v", h.kopts.Codec.String(), err)
+			}
 			continue
 		}
-		msgKey := fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
-		m.Header["key"] = msgKey
-		err := h.handler(&publication{m: &m, t: msg.Topic, km: msg, cg: h.cg, sess: sess})
-		if err != nil {
-			return errors.Wrapf(err, "%d", msg.Offset)
-		} else if h.subopts.AutoAck {
+		m.Header["key"] = fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
+
+		err := h.handler(p)
+		if err == nil && h.subopts.AutoAck {
 			sess.MarkMessage(msg, "")
+		} else if err != nil {
+			p.err = err
+			if eh != nil {
+				eh(p)
+			} else {
+				return errors.Wrapf(err, "%d", msg.Offset)
+			}
 		}
 	}
 	return nil
