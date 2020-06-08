@@ -3,6 +3,7 @@ package kafka
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/Shopify/sarama"
@@ -11,6 +12,7 @@ import (
 	"github.com/micro/go-micro/v2/codec/json"
 	"github.com/micro/go-micro/v2/config/cmd"
 	log "github.com/micro/go-micro/v2/logger"
+	"github.com/pkg/errors"
 )
 
 type kBroker struct {
@@ -111,11 +113,11 @@ func (k *kBroker) Connect() error {
 	}
 
 	k.scMutex.Lock()
-	defer k.scMutex.Unlock()
 	k.c = c
 	k.p = p
 	k.sc = make([]sarama.Client, 0)
 	k.connected = true
+	defer k.scMutex.Unlock()
 
 	return nil
 }
@@ -205,20 +207,20 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		cg:      cg,
 	}
 	ctx := context.Background()
-	topics := []string{topic}
+	topics := strings.Split(topic, ",")
 	go func() {
 		for {
 			select {
 			case err := <-cg.Errors():
 				if err != nil {
-					log.Error(err)
+					log.Errorf("consumer error:", err)
 				}
 			default:
 				err := cg.Consume(ctx, topics, h)
 				switch err {
 				case sarama.ErrInvalidTopic:
 				case sarama.ErrUnknownTopicOrPartition:
-					panic(err)
+					panic(errors.Wrapf(err, "topics: %s", topic))
 				case sarama.ErrClosedConsumerGroup:
 					return
 				case nil:
