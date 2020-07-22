@@ -160,6 +160,9 @@ func (k *kBroker) Options() broker.Options {
 }
 
 func (k *kBroker) Publish(topic string, msg *broker.Message, opts ...broker.PublishOption) error {
+	if len(topic) == 0 {
+		return errors.New("Publish topic cannot be empty")
+	}
 	b, err := k.opts.Codec.Marshal(msg)
 	if err != nil {
 		return err
@@ -184,6 +187,9 @@ func (k *kBroker) getSaramaClusterClient(topic string) (sarama.Client, error) {
 }
 
 func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
+	if len(topic) == 0 {
+		return nil, errors.New("Subscribe topic cannot be empty")
+	}
 	opt := broker.SubscribeOptions{
 		AutoAck: true,
 		Queue:   uuid.New().String(),
@@ -207,7 +213,15 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		cg:      cg,
 	}
 	ctx := context.Background()
-	topics := strings.Split(topic, ",")
+	topics := make([]string, 0)
+	for _, t := range strings.Split(topic, ",") {
+		if len(t) > 0 {
+			topics = append(topics, t)
+		}
+	}
+	if len(topics) == 0 {
+		return nil, errors.New("Subscribe topic cannot be empty")
+	}
 	go func() {
 		for {
 			select {
