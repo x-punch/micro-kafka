@@ -24,7 +24,7 @@ type kBroker struct {
 	sc []sarama.Client
 
 	connected bool
-	scMutex   sync.Mutex
+	scMutex   sync.RWMutex
 	opts      broker.Options
 }
 
@@ -84,12 +84,13 @@ func (k *kBroker) Address() string {
 }
 
 func (k *kBroker) Connect() error {
-	if k.connected {
+	if k.isConnected() {
 		return nil
 	}
 
 	k.scMutex.Lock()
 	if k.c != nil {
+		k.connected = true
 		k.scMutex.Unlock()
 		return nil
 	}
@@ -117,12 +118,15 @@ func (k *kBroker) Connect() error {
 	k.p = p
 	k.sc = make([]sarama.Client, 0)
 	k.connected = true
-	defer k.scMutex.Unlock()
+	k.scMutex.Unlock()
 
 	return nil
 }
 
 func (k *kBroker) Disconnect() error {
+	if !k.isConnected() {
+		return nil
+	}
 	k.scMutex.Lock()
 	defer k.scMutex.Unlock()
 	for _, client := range k.sc {
@@ -155,6 +159,12 @@ func (k *kBroker) Init(opts ...broker.Option) error {
 	return nil
 }
 
+func (k *kBroker) isConnected() bool {
+	k.scMutex.RLock()
+	defer k.scMutex.RUnlock()
+	return k.connected
+}
+
 func (k *kBroker) Options() broker.Options {
 	return k.opts
 }
@@ -163,14 +173,20 @@ func (k *kBroker) Publish(topic string, msg *broker.Message, opts ...broker.Publ
 	if len(topic) == 0 {
 		return errors.New("Publish topic cannot be empty")
 	}
+	if !k.isConnected() {
+		return errors.New("[kafka] broker not connected")
+	}
+
 	b, err := k.opts.Codec.Marshal(msg)
 	if err != nil {
 		return err
 	}
+
 	_, _, err = k.p.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(b),
 	})
+
 	return err
 }
 
@@ -227,7 +243,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 			select {
 			case err := <-cg.Errors():
 				if err != nil {
-					log.Errorf("consumer error:", err)
+					log.Errorf("consumer error: %v", err)
 				}
 			default:
 				err := cg.Consume(ctx, topics, h)
