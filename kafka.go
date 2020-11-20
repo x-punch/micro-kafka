@@ -7,11 +7,10 @@ import (
 	"sync"
 
 	"github.com/Shopify/sarama"
+	"github.com/asim/nitro/v3/broker"
+	"github.com/asim/nitro/v3/codec/json"
+	log "github.com/asim/nitro/v3/logger"
 	"github.com/google/uuid"
-	"github.com/micro/go-micro/v2/broker"
-	"github.com/micro/go-micro/v2/codec/json"
-	"github.com/micro/go-micro/v2/config/cmd"
-	log "github.com/micro/go-micro/v2/logger"
 	"github.com/pkg/errors"
 )
 
@@ -41,10 +40,6 @@ type publication struct {
 	km   *sarama.ConsumerMessage
 	m    *broker.Message
 	sess sarama.ConsumerGroupSession
-}
-
-func init() {
-	cmd.DefaultBrokers["kafka"] = NewBroker
 }
 
 func (p *publication) Topic() string {
@@ -207,8 +202,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		return nil, errors.New("Subscribe topic cannot be empty")
 	}
 	opt := broker.SubscribeOptions{
-		AutoAck: true,
-		Queue:   uuid.New().String(),
+		Queue: uuid.New().String(),
 	}
 	for _, o := range opts {
 		o(&opt)
@@ -225,6 +219,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 	h := &consumerGroupHandler{
 		handler: handler,
 		subopts: opt,
+		erropt:  opt.ErrorHandler,
 		kopts:   k.opts,
 		cg:      cg,
 	}
