@@ -204,7 +204,7 @@ func (k *kBroker) getSaramaClusterClient(topic string) (sarama.Client, error) {
 
 func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
 	if len(topic) == 0 {
-		return nil, errors.New("Subscribe topic cannot be empty")
+		panic(errors.New("Subscribed topic cannot be empty"))
 	}
 	opt := broker.SubscribeOptions{
 		AutoAck: true,
@@ -236,7 +236,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		}
 	}
 	if len(topics) == 0 {
-		return nil, errors.New("Subscribe topic cannot be empty")
+		panic(errors.New("Subscribed topic cannot be empty"))
 	}
 	go func() {
 		for {
