@@ -3,8 +3,8 @@ package kafka
 import (
 	"context"
 
-	"github.com/asim/nitro/v3/broker"
-	"github.com/asim/nitro/v3/server"
+	"github.com/asim/go-micro/v3/broker"
+	"github.com/asim/go-micro/v3/server"
 )
 
 // setSubscribeOption returns a function to setup a context with given value

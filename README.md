@@ -26,8 +26,8 @@ Import the plugins in a Go program then call service.Init to parse the command l
 
 ```go
 import (
-	"github.com/micro/go-micro"
-	_ "github.com/micro/go-plugins/broker/rabbitmq"
+	"github.com/asim/go-micro/v3"
+	_ "github.com/x-punch/micro-kafka/v3"
 	_ "github.com/micro/go-plugins/registry/kubernetes"
 	_ "github.com/micro/go-plugins/transport/nats"
 )
@@ -48,7 +48,7 @@ func main() {
 Specify the plugins as flags
 
 ```shell
-go run service.go --broker=rabbitmq --registry=kubernetes --transport=nats
+go run service.go --broker=kafka --registry=kubernetes --transport=nats
 ```
 
 ### Env
@@ -56,7 +56,7 @@ go run service.go --broker=rabbitmq --registry=kubernetes --transport=nats
 Use env vars to specify the plugins
 
 ```
-MICRO_BROKER=rabbitmq \
+MICRO_BROKER=kafka \
 MICRO_REGISTRY=kubernetes \ 
 MICRO_TRANSPORT=nats \ 
 go run service.go
@@ -68,8 +68,8 @@ Import and set as options when creating a new service
 
 ```go
 import (
-	"github.com/micro/go-micro"
-	"github.com/micro/go-plugins/registry/kubernetes"
+	"github.com/asim/go-micro/v3"
+	"github.com/asim/go-micro/plugins/registry/kubernetes/v3"
 )
 
 func main() {
@@ -96,7 +96,7 @@ Create file plugins.go
 package main
 
 import (
-	_ "github.com/micro/go-plugins/broker/rabbitmq"
+	_ "github.com/x-punch/micro-kafka/v3"
 	_ "github.com/micro/go-plugins/registry/kubernetes"
 	_ "github.com/micro/go-plugins/transport/nats"
 )
@@ -111,7 +111,7 @@ go build -o service main.go plugins.go
 Run with plugins
 
 ```shell
-MICRO_BROKER=rabbitmq \
+MICRO_BROKER=kafka \
 MICRO_REGISTRY=kubernetes \
 MICRO_TRANSPORT=nats \
 service

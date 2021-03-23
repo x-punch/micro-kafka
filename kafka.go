@@ -3,15 +3,16 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 
 	"github.com/Shopify/sarama"
-	"github.com/asim/nitro/v3/broker"
-	"github.com/asim/nitro/v3/codec/json"
-	log "github.com/asim/nitro/v3/logger"
+	"github.com/asim/go-micro/v3/broker"
+	"github.com/asim/go-micro/v3/cmd"
+	"github.com/asim/go-micro/v3/codec/json"
+	log "github.com/asim/go-micro/v3/logger"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 )
 
 type kBroker struct {
@@ -23,7 +24,7 @@ type kBroker struct {
 	sc []sarama.Client
 
 	connected bool
-	scMutex   sync.RWMutex
+	scMutex   sync.Mutex
 	opts      broker.Options
 }
 
@@ -40,6 +41,10 @@ type publication struct {
 	km   *sarama.ConsumerMessage
 	m    *broker.Message
 	sess sarama.ConsumerGroupSession
+}
+
+func init() {
+	cmd.DefaultBrokers["kafka"] = NewBroker
 }
 
 func (p *publication) Topic() string {
@@ -79,13 +84,12 @@ func (k *kBroker) Address() string {
 }
 
 func (k *kBroker) Connect() error {
-	if k.isConnected() {
+	if k.connected {
 		return nil
 	}
 
 	k.scMutex.Lock()
 	if k.c != nil {
-		k.connected = true
 		k.scMutex.Unlock()
 		return nil
 	}
@@ -113,15 +117,12 @@ func (k *kBroker) Connect() error {
 	k.p = p
 	k.sc = make([]sarama.Client, 0)
 	k.connected = true
-	k.scMutex.Unlock()
+	defer k.scMutex.Unlock()
 
 	return nil
 }
 
 func (k *kBroker) Disconnect() error {
-	if !k.isConnected() {
-		return nil
-	}
 	k.scMutex.Lock()
 	defer k.scMutex.Unlock()
 	for _, client := range k.sc {
@@ -154,12 +155,6 @@ func (k *kBroker) Init(opts ...broker.Option) error {
 	return nil
 }
 
-func (k *kBroker) isConnected() bool {
-	k.scMutex.RLock()
-	defer k.scMutex.RUnlock()
-	return k.connected
-}
-
 func (k *kBroker) Options() broker.Options {
 	return k.opts
 }
@@ -168,20 +163,14 @@ func (k *kBroker) Publish(topic string, msg *broker.Message, opts ...broker.Publ
 	if len(topic) == 0 {
 		return errors.New("Publish topic cannot be empty")
 	}
-	if !k.isConnected() {
-		return errors.New("[kafka] broker not connected")
-	}
-
 	b, err := k.opts.Codec.Marshal(msg)
 	if err != nil {
 		return err
 	}
-
 	_, _, err = k.p.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(b),
 	})
-
 	return err
 }
 
@@ -199,10 +188,11 @@ func (k *kBroker) getSaramaClusterClient(topic string) (sarama.Client, error) {
 
 func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
 	if len(topic) == 0 {
-		return nil, errors.New("Subscribe topic cannot be empty")
+		panic("Subscribed topic cannot be empty")
 	}
 	opt := broker.SubscribeOptions{
-		Queue: uuid.New().String(),
+		AutoAck: true,
+		Queue:   uuid.New().String(),
 	}
 	for _, o := range opts {
 		o(&opt)
@@ -219,7 +209,6 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 	h := &consumerGroupHandler{
 		handler: handler,
 		subopts: opt,
-		erropt:  opt.ErrorHandler,
 		kopts:   k.opts,
 		cg:      cg,
 	}
@@ -231,7 +220,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		}
 	}
 	if len(topics) == 0 {
-		return nil, errors.New("Subscribe topic cannot be empty")
+		panic("Subscribed topic cannot be empty")
 	}
 	go func() {
 		for {

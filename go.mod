@@ -1,10 +1,9 @@
 module github.com/x-punch/micro-kafka/v3
 
-go 1.15
+go 1.16
 
 require (
-	github.com/Shopify/sarama v1.27.2
-	github.com/asim/nitro/v3 v3.4.2
-	github.com/google/uuid v1.1.2
-	github.com/pkg/errors v0.9.1
+	github.com/Shopify/sarama v1.28.0
+	github.com/asim/go-micro/v3 v3.5.0
+	github.com/google/uuid v1.2.0
 )
