@@ -2,12 +2,10 @@ package kafka
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Shopify/sarama"
-	"github.com/micro/go-micro/broker"
-	"github.com/micro/go-micro/util/log"
-	"github.com/pkg/errors"
+	"github.com/asim/go-micro/v3/broker"
+	log "github.com/asim/go-micro/v3/logger"
 )
 
 var (
@@ -33,6 +31,12 @@ func SubscribeContext(ctx context.Context) broker.SubscribeOption {
 	return setSubscribeOption(subscribeContextKey{}, ctx)
 }
 
+type subscribeConfigKey struct{}
+
+func SubscribeConfig(c *sarama.Config) broker.SubscribeOption {
+	return setSubscribeOption(subscribeConfigKey{}, c)
+}
+
 // consumerGroupHandler is the implementation of sarama.ConsumerGroupHandler
 type consumerGroupHandler struct {
 	handler broker.Handler
@@ -43,34 +47,42 @@ type consumerGroupHandler struct {
 }
 
 func (*consumerGroupHandler) Setup(sess sarama.ConsumerGroupSession) error {
-	log.Logf("[Setup] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	log.Infof("[kafka] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
 	return nil
 }
 
 func (*consumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
-	log.Logf("[Clean] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	log.Infof("[kafka] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
 	return nil
 }
-
 func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
 		var m broker.Message
+		p := &publication{m: &m, t: msg.Topic, km: msg, cg: h.cg, sess: sess}
+		eh := h.kopts.ErrorHandler
+
 		if err := h.kopts.Codec.Unmarshal(msg.Value, &m); err != nil {
-			log.Logf("[Consume]%s: %s", h.kopts.Codec.String(), err.Error())
+			p.err = err
+			p.m.Body = msg.Value
+			if eh != nil {
+				eh(p)
+			} else {
+				log.Errorf("[kafka]%s failed to unmarshal: %v", h.kopts.Codec.String(), err)
+			}
 			continue
 		}
-		msgKey := fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
-		m.Header["key"] = msgKey
-		if err := h.handler(&publication{
-			m:    &m,
-			t:    msg.Topic,
-			km:   msg,
-			cg:   h.cg,
-			sess: sess,
-		}); err != nil {
-			return errors.Wrapf(err, "%d", msg.Offset)
-		} else if h.subopts.AutoAck {
+
+		err := h.handler(p)
+		if err == nil && h.subopts.AutoAck {
 			sess.MarkMessage(msg, "")
+		} else if err != nil {
+			p.err = err
+			if eh != nil {
+				eh(p)
+			} else {
+				log.Errorf("[kafka]subscriber error: %v", err)
+				return errors.Wrapf(err, "%d", msg.Offset)
+			}
 		}
 	}
 	return nil

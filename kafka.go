@@ -3,14 +3,16 @@ package kafka
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"sync"
 
 	"github.com/Shopify/sarama"
+	"github.com/asim/go-micro/v3/broker"
+	"github.com/asim/go-micro/v3/cmd"
+	"github.com/asim/go-micro/v3/codec/json"
+	log "github.com/asim/go-micro/v3/logger"
 	"github.com/google/uuid"
-	"github.com/micro/go-micro/broker"
-	"github.com/micro/go-micro/codec/json"
-	"github.com/micro/go-micro/config/cmd"
-	"github.com/micro/go-micro/util/log"
 )
 
 type kBroker struct {
@@ -21,8 +23,9 @@ type kBroker struct {
 
 	sc []sarama.Client
 
-	scMutex sync.Mutex
-	opts    broker.Options
+	connected bool
+	scMutex   sync.Mutex
+	opts      broker.Options
 }
 
 type subscriber struct {
@@ -33,6 +36,7 @@ type subscriber struct {
 
 type publication struct {
 	t    string
+	err  error
 	cg   sarama.ConsumerGroup
 	km   *sarama.ConsumerMessage
 	m    *broker.Message
@@ -56,6 +60,10 @@ func (p *publication) Ack() error {
 	return nil
 }
 
+func (p *publication) Error() error {
+	return p.err
+}
+
 func (s *subscriber) Options() broker.SubscribeOptions {
 	return s.opts
 }
@@ -76,9 +84,16 @@ func (k *kBroker) Address() string {
 }
 
 func (k *kBroker) Connect() error {
-	if k.c != nil {
+	if k.connected {
 		return nil
 	}
+
+	k.scMutex.Lock()
+	if k.c != nil {
+		k.scMutex.Unlock()
+		return nil
+	}
+	k.scMutex.Unlock()
 
 	pconfig := k.getBrokerConfig()
 	// For implementation reasons, the SyncProducer requires
@@ -92,17 +107,17 @@ func (k *kBroker) Connect() error {
 		return err
 	}
 
-	k.c = c
-
 	p, err := sarama.NewSyncProducerFromClient(c)
 	if err != nil {
 		return err
 	}
 
-	k.p = p
 	k.scMutex.Lock()
-	defer k.scMutex.Unlock()
+	k.c = c
+	k.p = p
 	k.sc = make([]sarama.Client, 0)
+	k.connected = true
+	defer k.scMutex.Unlock()
 
 	return nil
 }
@@ -115,7 +130,11 @@ func (k *kBroker) Disconnect() error {
 	}
 	k.sc = nil
 	k.p.Close()
-	return k.c.Close()
+	if err := k.c.Close(); err != nil {
+		return err
+	}
+	k.connected = false
+	return nil
 }
 
 func (k *kBroker) Init(opts ...broker.Option) error {
@@ -141,6 +160,9 @@ func (k *kBroker) Options() broker.Options {
 }
 
 func (k *kBroker) Publish(topic string, msg *broker.Message, opts ...broker.PublishOption) error {
+	if len(topic) == 0 {
+		return errors.New("Publish topic cannot be empty")
+	}
 	b, err := k.opts.Codec.Marshal(msg)
 	if err != nil {
 		return err
@@ -165,6 +187,9 @@ func (k *kBroker) getSaramaClusterClient(topic string) (sarama.Client, error) {
 }
 
 func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker.SubscribeOption) (broker.Subscriber, error) {
+	if len(topic) == 0 {
+		panic("Subscribed topic cannot be empty")
+	}
 	opt := broker.SubscribeOptions{
 		AutoAck: true,
 		Queue:   uuid.New().String(),
@@ -188,25 +213,34 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 		cg:      cg,
 	}
 	ctx := context.Background()
-	topics := []string{topic}
+	topics := make([]string, 0)
+	for _, t := range strings.Split(topic, ",") {
+		if len(t) > 0 {
+			topics = append(topics, t)
+		}
+	}
+	if len(topics) == 0 {
+		panic("Subscribed topic cannot be empty")
+	}
 	go func() {
 		for {
 			select {
 			case err := <-cg.Errors():
 				if err != nil {
-					log.Log(err)
+					log.Errorf("consumer error: %v", err)
 				}
 			default:
 				err := cg.Consume(ctx, topics, h)
-				if err != nil {
-					switch err {
-					case sarama.ErrInvalidTopic:
-					case sarama.ErrUnknownTopicOrPartition:
-						panic(err)
-					case sarama.ErrClosedConsumerGroup:
-						return
-					}
-					log.Log(err)
+				switch err {
+				case sarama.ErrInvalidTopic:
+				case sarama.ErrUnknownTopicOrPartition:
+					panic(errors.Wrapf(err, "topics: %s", topic))
+				case sarama.ErrClosedConsumerGroup:
+					return
+				case nil:
+					continue
+				default:
+					log.Error(err)
 				}
 			}
 		}
