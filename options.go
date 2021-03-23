@@ -5,7 +5,8 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/asim/go-micro/v3/broker"
-	log "github.com/asim/go-micro/v3/logger"
+	"github.com/asim/go-micro/v3/logger"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -47,12 +48,12 @@ type consumerGroupHandler struct {
 }
 
 func (*consumerGroupHandler) Setup(sess sarama.ConsumerGroupSession) error {
-	log.Infof("[kafka] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	logger.Infof("[kafka] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
 	return nil
 }
 
 func (*consumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
-	log.Infof("[kafka] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
+	logger.Infof("[kafka] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
 	return nil
 }
 func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
@@ -67,7 +68,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			if eh != nil {
 				eh(p)
 			} else {
-				log.Errorf("[kafka]%s failed to unmarshal: %v", h.kopts.Codec.String(), err)
+				logger.Errorf("[kafka]%s failed to unmarshal: %v", h.kopts.Codec.String(), err)
 			}
 			continue
 		}
@@ -80,7 +81,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			if eh != nil {
 				eh(p)
 			} else {
-				log.Errorf("[kafka]subscriber error: %v", err)
+				logger.Errorf("[kafka]subscriber error: %v", err)
 				return errors.Wrapf(err, "%d", msg.Offset)
 			}
 		}

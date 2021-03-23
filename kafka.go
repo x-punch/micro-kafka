@@ -3,7 +3,6 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 
@@ -11,8 +10,9 @@ import (
 	"github.com/asim/go-micro/v3/broker"
 	"github.com/asim/go-micro/v3/cmd"
 	"github.com/asim/go-micro/v3/codec/json"
-	log "github.com/asim/go-micro/v3/logger"
+	"github.com/asim/go-micro/v3/logger"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 type kBroker struct {
@@ -227,7 +227,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 			select {
 			case err := <-cg.Errors():
 				if err != nil {
-					log.Errorf("consumer error: %v", err)
+					logger.Errorf("consumer error: %v", err)
 				}
 			default:
 				err := cg.Consume(ctx, topics, h)
@@ -240,7 +240,7 @@ func (k *kBroker) Subscribe(topic string, handler broker.Handler, opts ...broker
 				case nil:
 					continue
 				default:
-					log.Error(err)
+					logger.Error(err)
 				}
 			}
 		}
