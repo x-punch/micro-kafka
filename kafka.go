@@ -9,7 +9,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/asim/go-micro/v3/broker"
 	"github.com/asim/go-micro/v3/cmd"
-	"github.com/asim/go-micro/v3/codec/json"
+	"github.com/x-punch/micro-kafka/v3/codec"
 	"github.com/asim/go-micro/v3/logger"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -255,7 +255,7 @@ func (k *kBroker) String() string {
 func NewBroker(opts ...broker.Option) broker.Broker {
 	options := broker.Options{
 		// default to json codec
-		Codec:   json.Marshaler{},
+		Codec:   codec.Marshaler{},
 		Context: context.Background(),
 	}
 
