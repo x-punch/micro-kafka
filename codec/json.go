@@ -21,10 +21,11 @@ func (Marshaler) Unmarshal(d []byte, v interface{}) error {
 		if msg.Header == nil {
 			msg.Header = make(map[string]string)
 		}
+		// used to handle message not from go-micro, which cannot be unmarshalled to broker.Message
 		msg.Header["Content-Type"] = "application/json"
 		msg.Body = d
-		return nil
 	}
+	// if d is published by go-micro, overwrite by unmarshal
 	return json.Unmarshal(d, v)
 }
 

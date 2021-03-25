@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Shopify/sarama"
 	"github.com/asim/go-micro/v3/broker"
@@ -72,6 +73,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			}
 			continue
 		}
+		m.Header["key"] = fmt.Sprintf("%s/%d/%d", msg.Topic, msg.Partition, msg.Offset)
 
 		err := h.handler(p)
 		if err == nil && h.subopts.AutoAck {
