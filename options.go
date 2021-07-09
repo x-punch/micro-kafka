@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Shopify/sarama"
 	"github.com/asim/go-micro/v3/broker"
@@ -79,6 +80,11 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 		if err == nil && h.subopts.AutoAck {
 			sess.MarkMessage(msg, "")
 		} else if err != nil {
+			if strings.Contains(err.Error(), "cannot parse invalid wire-format data") {
+				logger.Errorf("[kafka]proto unmarshal error: %v", err)
+				sess.MarkMessage(msg, "")
+				continue
+			}
 			p.err = err
 			if eh != nil {
 				eh(p)
