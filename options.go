@@ -46,7 +46,6 @@ type consumerGroupHandler struct {
 	subopts broker.SubscribeOptions
 	kopts   broker.Options
 	cg      sarama.ConsumerGroup
-	sess    sarama.ConsumerGroupSession
 }
 
 func (*consumerGroupHandler) Setup(sess sarama.ConsumerGroupSession) error {

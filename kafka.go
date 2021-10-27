@@ -9,7 +9,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/asim/go-micro/v3/broker"
 	"github.com/asim/go-micro/v3/cmd"
-	"github.com/x-punch/micro-kafka/v3/codec"
+	"github.com/asim/go-micro/v3/codec/json"
 	"github.com/asim/go-micro/v3/logger"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -129,7 +129,9 @@ func (k *kBroker) Disconnect() error {
 		client.Close()
 	}
 	k.sc = nil
-	k.p.Close()
+	if k.p != nil {
+		k.p.Close()
+	}
 	if err := k.c.Close(); err != nil {
 		return err
 	}
@@ -255,7 +257,7 @@ func (k *kBroker) String() string {
 func NewBroker(opts ...broker.Option) broker.Broker {
 	options := broker.Options{
 		// default to json codec
-		Codec:   codec.Marshaler{},
+		Codec:   json.Marshaler{},
 		Context: context.Background(),
 	}
 
