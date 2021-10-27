@@ -1,4 +1,4 @@
-module github.com/x-punch/micro-kafka/v3
+module github.com/x-punch/micro-kafka/v4
 
 go 1.17
 
