@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	"github.com/asim/go-micro/v3/broker"
-	"github.com/asim/go-micro/v3/logger"
 	"github.com/pkg/errors"
+	"go-micro.dev/v4/broker"
+	"go-micro.dev/v4/logger"
 )
 
 var (
@@ -57,6 +57,7 @@ func (*consumerGroupHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 	logger.Infof("[kafka] %v:%s:%d", sess.Claims(), sess.MemberID(), sess.GenerationID())
 	return nil
 }
+
 func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
 		var m broker.Message
